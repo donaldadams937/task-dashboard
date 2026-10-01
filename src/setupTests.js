@@ -11,13 +11,26 @@ afterEach(() => {
   cleanup();
 });
 
+if (!window.unbeltedTech) {
+  window.unbeltedTech = {
+    chooseProjectsRoot: vi.fn(),
+    getSettings: vi.fn(),
+    onAgentEvent: vi.fn(() => vi.fn()),
+    openProject: vi.fn(),
+    saveSettings: vi.fn(),
+    startBuild: vi.fn(),
+    stopBuild: vi.fn(),
+  };
+}
+
 // Mock framer-motion to avoid animation-related test issues
 vi.mock('framer-motion', () => {
   return {
     motion: {
       div: ({ children, ...props }) => React.createElement('div', props, children),
       button: ({ children, ...props }) => React.createElement('button', props, children),
-      p: ({ children, ...props }) => React.createElement('p', props, children)
+      form: ({ children, ...props }) => React.createElement('form', props, children),
+      p: ({ children, ...props }) => React.createElement('p', props, children),
     },
     AnimatePresence: ({ children }) => children,
   };
