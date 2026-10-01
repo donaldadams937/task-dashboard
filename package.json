@@ -1,13 +1,22 @@
 {
-  "name": "task-dashboard",
+  "name": "unbeltedtech",
+  "productName": "UnbeltedTech",
   "version": "0.1.0",
+  "description": "An autonomous desktop AI builder for creating and testing applications.",
+  "author": "UnbeltedTech",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/donaldadams937/task-dashboard.git"
+  },
   "private": true,
+  "main": "electron/main.cjs",
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
     "framer-motion": "^12.23.9",
+    "openai": "^7.25.0",
     "postcss": "^8.5.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -19,13 +28,12 @@
     "@adobe/css-tools": "^4.3.1"
   },
   "scripts": {
-    "start": "BROWSER=none WDS_SOCKET_PORT=0 vite --port 3000",
-    "start:hydrated": "VITE_ENABLE_DATA_HYDRATION=true BROWSER=none WDS_SOCKET_PORT=0 vite --port 3000",
+    "start": "concurrently --kill-others \"vite --port 3000\" \"wait-on tcp:3000 && electron .\"",
+    "start:web": "vite --port 3000",
     "build": "vite build",
-    "build:hydrated": "VITE_ENABLE_DATA_HYDRATION=true vite build",
-    "build:clean": "VITE_ENABLE_DATA_HYDRATION=false vite build",
+    "package": "npm run build && electron-builder",
+    "package:dir": "npm run build && electron-builder --dir",
     "preview": "vite preview",
-    "preview:hydrated": "VITE_ENABLE_DATA_HYDRATION=true vite preview",
     "test": "vitest run",
     "build:css": "tailwindcss build src/index.css -o src/output.css",
     "watch:css": "tailwindcss -i src/index.css -o src/output.css --watch"
@@ -53,10 +61,33 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^5.1.3",
+    "concurrently": "^10.0.5",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "jest-environment-jsdom": "^30.2.0",
     "jsdom": "^26.1.0",
     "msw": "^2.12.9",
     "vite": "^7.3.1",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "tech.unbelted.builder",
+    "productName": "UnbeltedTech",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
