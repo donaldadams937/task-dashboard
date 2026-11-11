@@ -20,10 +20,10 @@ import {
   PlusIcon,
   QuestionMarkCircleIcon,
   SparklesIcon,
-  KeyIcon,
+  CpuChipIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { generateGeminiResponse } from './services/geminiService';
+import { generateLocalResponse, isWebGPUSupported } from './services/localAIService';
 
 const promptCards = [
   {
@@ -63,8 +63,6 @@ const previousChats = [
   'Prototype architecture',
 ];
 
-const API_KEY_STORAGE = 'unbeltedtech.geminiApiKey';
-
 function BrandMark({ compact = false }) {
   return (
     <div className={`brand-mark${compact ? ' brand-mark--compact' : ''}`} aria-hidden="true">
@@ -83,9 +81,10 @@ function App() {
   const [modelOpen, setModelOpen] = useState(false);
   const [model, setModel] = useState('UT Pro');
   const [copiedIndex, setCopiedIndex] = useState(null);
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem(API_KEY_STORAGE) ?? '');
-  const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelStatus, setModelStatus] = useState('idle');
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [loadMessage, setLoadMessage] = useState('');
   const textareaRef = useRef(null);
 
   const resizeTextarea = () => {
@@ -110,26 +109,27 @@ function App() {
     const value = prompt.trim();
     if (!value || isThinking) return;
 
-    if (!apiKey) {
-      setApiKeyDraft('');
-      setSettingsOpen(true);
-      return;
-    }
-
     const conversation = messages;
     setMessages([...conversation, { role: 'user', content: value }]);
     setPrompt('');
     setIsThinking(true);
 
     try {
-      const response = await generateGeminiResponse({
-        apiKey,
+      setModelStatus((status) => status === 'ready' ? status : 'loading');
+      const response = await generateLocalResponse({
         model,
         messages: conversation,
         prompt: value,
+        onProgress: ({ progress, text }) => {
+          setModelStatus('loading');
+          setLoadProgress(progress);
+          setLoadMessage(text);
+        },
       });
       setMessages((current) => [...current, { role: 'assistant', content: response }]);
+      setModelStatus('ready');
     } catch (error) {
+      setModelStatus('error');
       setMessages((current) => [
         ...current,
         {
@@ -162,25 +162,8 @@ function App() {
   };
 
   const openSettings = () => {
-    setApiKeyDraft(apiKey);
     setSettingsOpen(true);
     setSidebarOpen(false);
-  };
-
-  const saveApiKey = (event) => {
-    event.preventDefault();
-    const nextKey = apiKeyDraft.trim();
-    if (!nextKey) return;
-    sessionStorage.setItem(API_KEY_STORAGE, nextKey);
-    setApiKey(nextKey);
-    setSettingsOpen(false);
-    textareaRef.current?.focus();
-  };
-
-  const removeApiKey = () => {
-    sessionStorage.removeItem(API_KEY_STORAGE);
-    setApiKey('');
-    setApiKeyDraft('');
   };
 
   return (
@@ -281,6 +264,9 @@ function App() {
                     key={option}
                     onClick={() => {
                       setModel(option);
+                      setModelStatus('idle');
+                      setLoadProgress(0);
+                      setLoadMessage('');
                       setModelOpen(false);
                     }}
                   >
@@ -300,8 +286,8 @@ function App() {
               <MagnifyingGlassIcon />
             </button>
             <button className="system-indicator" onClick={openSettings}>
-              <span className={apiKey ? '' : 'system-offline'} />
-              {apiKey ? 'GEMINI CONNECTED' : 'CONNECT GEMINI'}
+              <span className={modelStatus === 'error' ? 'system-offline' : ''} />
+              {modelStatus === 'ready' ? 'LOCAL AI READY' : modelStatus === 'loading' ? 'LOADING MODEL' : 'LOCAL AI'}
             </button>
             <div className="topbar-avatar" aria-label="User profile">DA</div>
           </div>
@@ -385,6 +371,18 @@ function App() {
         </section>
 
         <div className="composer-wrap">
+          {modelStatus === 'loading' && (
+            <div className="model-progress" role="status">
+              <div>
+                <span>INITIALIZING LOCAL MODEL</span>
+                <strong>{Math.round(loadProgress * 100)}%</strong>
+              </div>
+              <div className="model-progress-track">
+                <i style={{ width: `${Math.max(2, loadProgress * 100)}%` }} />
+              </div>
+              <p>{loadMessage || 'Preparing private on-device intelligence...'}</p>
+            </div>
+          )}
           <form className="composer" onSubmit={sendMessage}>
             <textarea
               ref={textareaRef}
@@ -437,45 +435,37 @@ function App() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="settings-modal-header">
-              <div className="settings-modal-icon"><KeyIcon /></div>
+              <div className="settings-modal-icon"><CpuChipIcon /></div>
               <button className="icon-button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>
                 <XMarkIcon />
               </button>
             </div>
-            <p className="eyebrow"><span /> INTELLIGENCE CONNECTION</p>
-            <h2 id="gemini-settings-title">Connect Gemini</h2>
+            <p className="eyebrow"><span /> ON-DEVICE INTELLIGENCE</p>
+            <h2 id="gemini-settings-title">Local AI core</h2>
             <p>
-              Add your Google AI Studio API key to generate real answers. The key is stored only
-              in this browser session and is never committed to the project.
+              Unbeltedtech runs privately on your device with WebGPU. No account, API key, or
+              remote inference service is required.
             </p>
-            <form onSubmit={saveApiKey}>
-              <label htmlFor="gemini-api-key">Gemini API key</label>
-              <input
-                id="gemini-api-key"
-                type="password"
-                value={apiKeyDraft}
-                onChange={(event) => setApiKeyDraft(event.target.value)}
-                placeholder="AIza..."
-                autoComplete="off"
-                autoFocus
-              />
-              <div className="settings-actions">
-                {apiKey && (
-                  <button type="button" className="remove-key-button" onClick={removeApiKey}>
-                    Remove key
-                  </button>
-                )}
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
-                  Get an API key
-                </a>
-                <button type="submit" className="save-key-button" disabled={!apiKeyDraft.trim()}>
-                  Connect
-                </button>
+            <div className="local-model-details">
+              <div>
+                <span>WEBGPU</span>
+                <strong className={isWebGPUSupported() ? 'supported' : 'unsupported'}>
+                  {isWebGPUSupported() ? 'SUPPORTED' : 'NOT AVAILABLE'}
+                </strong>
               </div>
-            </form>
-            <small>
-              For a public production deployment, route Gemini requests through a secure backend.
-            </small>
+              <div>
+                <span>UT PRO</span>
+                <strong>LLAMA 3.2 3B / ~2 GB</strong>
+              </div>
+              <div>
+                <span>UT FLASH</span>
+                <strong>QWEN3 0.6B / ~500 MB</strong>
+              </div>
+            </div>
+            <button className="save-key-button local-close-button" onClick={() => setSettingsOpen(false)}>
+              Continue
+            </button>
+            <small>Model files are downloaded once and cached by your browser for future sessions.</small>
           </section>
         </div>
       )}

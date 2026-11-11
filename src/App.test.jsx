@@ -2,15 +2,15 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import App from './App';
-import { generateGeminiResponse } from './services/geminiService';
+import { generateLocalResponse } from './services/localAIService';
 
-vi.mock('./services/geminiService', () => ({
-  generateGeminiResponse: vi.fn(),
+vi.mock('./services/localAIService', () => ({
+  generateLocalResponse: vi.fn(),
+  isWebGPUSupported: vi.fn(() => true),
 }));
 
 describe('Unbeltedtech', () => {
   beforeEach(() => {
-    sessionStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -33,20 +33,8 @@ describe('Unbeltedtech', () => {
     );
   });
 
-  it('asks for a Gemini key before sending', () => {
-    render(<App />);
-
-    const composer = screen.getByRole('textbox');
-    fireEvent.change(composer, { target: { value: 'Help me analyze a product trend' } });
-    fireEvent.submit(composer.closest('form'));
-
-    expect(screen.getByRole('dialog', { name: /Connect Gemini/i })).toBeInTheDocument();
-    expect(generateGeminiResponse).not.toHaveBeenCalled();
-  });
-
-  it('sends a prompt and displays a Gemini response', async () => {
-    sessionStorage.setItem('unbeltedtech.geminiApiKey', 'test-api-key');
-    generateGeminiResponse.mockResolvedValue('This answer came from Gemini.');
+  it('sends a prompt and displays a local AI response', async () => {
+    generateLocalResponse.mockResolvedValue('This answer came from the local model.');
     render(<App />);
 
     const composer = screen.getByRole('textbox');
@@ -56,12 +44,12 @@ describe('Unbeltedtech', () => {
     });
 
     expect(screen.getByText('Help me analyze a product trend')).toBeInTheDocument();
-    expect(screen.getByText('This answer came from Gemini.')).toBeInTheDocument();
-    expect(generateGeminiResponse).toHaveBeenCalledWith(
+    expect(screen.getByText('This answer came from the local model.')).toBeInTheDocument();
+    expect(generateLocalResponse).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiKey: 'test-api-key',
         model: 'UT Pro',
         prompt: 'Help me analyze a product trend',
+        onProgress: expect.any(Function),
       }),
     );
   });
