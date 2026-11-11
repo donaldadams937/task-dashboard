@@ -2,8 +2,18 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import App from './App';
+import { generateGeminiResponse } from './services/geminiService';
+
+vi.mock('./services/geminiService', () => ({
+  generateGeminiResponse: vi.fn(),
+}));
 
 describe('Unbeltedtech', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.clearAllMocks();
+  });
+
   it('renders the AI welcome experience', () => {
     render(<App />);
 
@@ -23,22 +33,36 @@ describe('Unbeltedtech', () => {
     );
   });
 
-  it('sends a prompt and displays an AI response', async () => {
-    vi.useFakeTimers();
+  it('asks for a Gemini key before sending', () => {
     render(<App />);
 
     const composer = screen.getByRole('textbox');
     fireEvent.change(composer, { target: { value: 'Help me analyze a product trend' } });
     fireEvent.submit(composer.closest('form'));
 
-    expect(screen.getByText('Help me analyze a product trend')).toBeInTheDocument();
-    expect(screen.getByLabelText('Unbeltedtech is thinking')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /Connect Gemini/i })).toBeInTheDocument();
+    expect(generateGeminiResponse).not.toHaveBeenCalled();
+  });
 
+  it('sends a prompt and displays a Gemini response', async () => {
+    sessionStorage.setItem('unbeltedtech.geminiApiKey', 'test-api-key');
+    generateGeminiResponse.mockResolvedValue('This answer came from Gemini.');
+    render(<App />);
+
+    const composer = screen.getByRole('textbox');
+    fireEvent.change(composer, { target: { value: 'Help me analyze a product trend' } });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      fireEvent.submit(composer.closest('form'));
     });
 
-    expect(screen.getByText(/Start with a clear question/i)).toBeInTheDocument();
-    vi.useRealTimers();
+    expect(screen.getByText('Help me analyze a product trend')).toBeInTheDocument();
+    expect(screen.getByText('This answer came from Gemini.')).toBeInTheDocument();
+    expect(generateGeminiResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'test-api-key',
+        model: 'UT Pro',
+        prompt: 'Help me analyze a product trend',
+      }),
+    );
   });
 });

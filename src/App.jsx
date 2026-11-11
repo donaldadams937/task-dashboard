@@ -20,8 +20,10 @@ import {
   PlusIcon,
   QuestionMarkCircleIcon,
   SparklesIcon,
+  KeyIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { generateGeminiResponse } from './services/geminiService';
 
 const promptCards = [
   {
@@ -61,12 +63,7 @@ const previousChats = [
   'Prototype architecture',
 ];
 
-const exampleResponses = {
-  react: 'Here is a strong starting point: keep the component focused, model its variants as props, and use a small set of responsive layout primitives. I would also add keyboard-visible focus states and test the primary interaction with React Testing Library.',
-  analyze: 'Start with a clear question, then compare a small number of reliable metrics over consistent time windows. Look for changes in direction, magnitude, and user segments—then validate each pattern against qualitative feedback before drawing a conclusion.',
-  plan: 'I would shape the trip around one neighborhood per day, with a single anchor activity and plenty of room to explore. That keeps travel time low and makes it easier to discover local food, galleries, and quieter side streets along the way.',
-  default: 'That is a great prompt. I can help turn it into a clear, practical plan with concrete next steps. Start by defining the outcome you want, the constraints that matter most, and what a successful result should look like.',
-};
+const API_KEY_STORAGE = 'unbeltedtech.geminiApiKey';
 
 function BrandMark({ compact = false }) {
   return (
@@ -86,10 +83,10 @@ function App() {
   const [modelOpen, setModelOpen] = useState(false);
   const [model, setModel] = useState('UT Pro');
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem(API_KEY_STORAGE) ?? '');
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const textareaRef = useRef(null);
-  const responseTimer = useRef(null);
-
-  useEffect(() => () => clearTimeout(responseTimer.current), []);
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -101,7 +98,6 @@ function App() {
   useEffect(resizeTextarea, [prompt]);
 
   const startNewChat = () => {
-    clearTimeout(responseTimer.current);
     setMessages([]);
     setPrompt('');
     setIsThinking(false);
@@ -109,30 +105,42 @@ function App() {
     textareaRef.current?.focus();
   };
 
-  const getResponse = (value) => {
-    const normalized = value.toLowerCase();
-    if (normalized.includes('react') || normalized.includes('component')) return exampleResponses.react;
-    if (normalized.includes('analy') || normalized.includes('trend')) return exampleResponses.analyze;
-    if (normalized.includes('trip') || normalized.includes('adventure')) return exampleResponses.plan;
-    return exampleResponses.default;
-  };
-
-  const sendMessage = (event) => {
+  const sendMessage = async (event) => {
     event?.preventDefault();
     const value = prompt.trim();
     if (!value || isThinking) return;
 
-    setMessages((current) => [...current, { role: 'user', content: value }]);
+    if (!apiKey) {
+      setApiKeyDraft('');
+      setSettingsOpen(true);
+      return;
+    }
+
+    const conversation = messages;
+    setMessages([...conversation, { role: 'user', content: value }]);
     setPrompt('');
     setIsThinking(true);
 
-    responseTimer.current = setTimeout(() => {
+    try {
+      const response = await generateGeminiResponse({
+        apiKey,
+        model,
+        messages: conversation,
+        prompt: value,
+      });
+      setMessages((current) => [...current, { role: 'assistant', content: response }]);
+    } catch (error) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: getResponse(value) },
+        {
+          role: 'assistant',
+          content: error instanceof Error ? error.message : 'The AI request failed. Please try again.',
+          error: true,
+        },
       ]);
+    } finally {
       setIsThinking(false);
-    }, 650);
+    }
   };
 
   const selectSuggestion = (value) => {
@@ -151,6 +159,28 @@ function App() {
     await navigator.clipboard?.writeText(content);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 1500);
+  };
+
+  const openSettings = () => {
+    setApiKeyDraft(apiKey);
+    setSettingsOpen(true);
+    setSidebarOpen(false);
+  };
+
+  const saveApiKey = (event) => {
+    event.preventDefault();
+    const nextKey = apiKeyDraft.trim();
+    if (!nextKey) return;
+    sessionStorage.setItem(API_KEY_STORAGE, nextKey);
+    setApiKey(nextKey);
+    setSettingsOpen(false);
+    textareaRef.current?.focus();
+  };
+
+  const removeApiKey = () => {
+    sessionStorage.removeItem(API_KEY_STORAGE);
+    setApiKey('');
+    setApiKeyDraft('');
   };
 
   return (
@@ -209,7 +239,7 @@ function App() {
             <QuestionMarkCircleIcon />
             <span>System docs</span>
           </button>
-          <button className="nav-item">
+          <button className="nav-item" onClick={openSettings}>
             <Cog6ToothIcon />
             <span>Settings</span>
           </button>
@@ -269,7 +299,10 @@ function App() {
             <button className="icon-button search-button" aria-label="Search">
               <MagnifyingGlassIcon />
             </button>
-            <div className="system-indicator"><span /> SYSTEM NOMINAL</div>
+            <button className="system-indicator" onClick={openSettings}>
+              <span className={apiKey ? '' : 'system-offline'} />
+              {apiKey ? 'GEMINI CONNECTED' : 'CONNECT GEMINI'}
+            </button>
             <div className="topbar-avatar" aria-label="User profile">DA</div>
           </div>
         </header>
@@ -317,7 +350,10 @@ function App() {
           ) : (
             <div className="message-list" aria-live="polite">
               {messages.map((message, index) => (
-                <article key={`${message.role}-${index}`} className={`message message--${message.role}`}>
+                <article
+                  key={`${message.role}-${index}`}
+                  className={`message message--${message.role}${message.error ? ' message--error' : ''}`}
+                >
                   <div className="message-avatar">
                     {message.role === 'assistant' ? <BrandMark compact /> : 'DA'}
                   </div>
@@ -390,6 +426,59 @@ function App() {
           </p>
         </div>
       </main>
+
+      {settingsOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+          <section
+            className="settings-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gemini-settings-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="settings-modal-header">
+              <div className="settings-modal-icon"><KeyIcon /></div>
+              <button className="icon-button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>
+                <XMarkIcon />
+              </button>
+            </div>
+            <p className="eyebrow"><span /> INTELLIGENCE CONNECTION</p>
+            <h2 id="gemini-settings-title">Connect Gemini</h2>
+            <p>
+              Add your Google AI Studio API key to generate real answers. The key is stored only
+              in this browser session and is never committed to the project.
+            </p>
+            <form onSubmit={saveApiKey}>
+              <label htmlFor="gemini-api-key">Gemini API key</label>
+              <input
+                id="gemini-api-key"
+                type="password"
+                value={apiKeyDraft}
+                onChange={(event) => setApiKeyDraft(event.target.value)}
+                placeholder="AIza..."
+                autoComplete="off"
+                autoFocus
+              />
+              <div className="settings-actions">
+                {apiKey && (
+                  <button type="button" className="remove-key-button" onClick={removeApiKey}>
+                    Remove key
+                  </button>
+                )}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
+                  Get an API key
+                </a>
+                <button type="submit" className="save-key-button" disabled={!apiKeyDraft.trim()}>
+                  Connect
+                </button>
+              </div>
+            </form>
+            <small>
+              For a public production deployment, route Gemini requests through a secure backend.
+            </small>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
