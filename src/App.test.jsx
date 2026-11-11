@@ -7,6 +7,7 @@ import { generateLocalResponse } from './services/localAIService';
 vi.mock('./services/localAIService', () => ({
   generateLocalResponse: vi.fn(),
   isWebGPUSupported: vi.fn(() => true),
+  prepareLocalModel: vi.fn(() => new Promise(() => {})),
 }));
 
 describe('Unbeltedtech', () => {
@@ -34,7 +35,10 @@ describe('Unbeltedtech', () => {
   });
 
   it('sends a prompt and displays a local AI response', async () => {
-    generateLocalResponse.mockResolvedValue('This answer came from the local model.');
+    generateLocalResponse.mockImplementation(async ({ onToken }) => {
+      onToken('This answer is streaming');
+      return 'This answer came from the local model.';
+    });
     render(<App />);
 
     const composer = screen.getByRole('textbox');
@@ -47,9 +51,10 @@ describe('Unbeltedtech', () => {
     expect(screen.getByText('This answer came from the local model.')).toBeInTheDocument();
     expect(generateLocalResponse).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'UT Pro',
+        model: 'UT Flash',
         prompt: 'Help me analyze a product trend',
         onProgress: expect.any(Function),
+        onToken: expect.any(Function),
       }),
     );
   });

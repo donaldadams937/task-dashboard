@@ -4,7 +4,7 @@ const createCompletion = vi.fn();
 const createEngine = vi.fn();
 
 vi.mock('@mlc-ai/web-llm', () => ({
-  CreateMLCEngine: createEngine,
+  CreateWebWorkerMLCEngine: createEngine,
 }));
 
 describe('localAIService', () => {
@@ -15,9 +15,13 @@ describe('localAIService', () => {
       configurable: true,
       value: {},
     });
-    createCompletion.mockResolvedValue({
-      choices: [{ message: { content: 'A local answer.' } }],
-    });
+    vi.stubGlobal('Worker', vi.fn(function Worker() {
+      this.terminate = vi.fn();
+    }));
+    createCompletion.mockResolvedValue((async function* stream() {
+      yield { choices: [{ delta: { content: 'A local ' } }] };
+      yield { choices: [{ delta: { content: 'answer.' } }] };
+    })());
     createEngine.mockResolvedValue({
       chat: { completions: { create: createCompletion } },
     });
@@ -26,16 +30,20 @@ describe('localAIService', () => {
   it('loads a local model and sends conversation context', async () => {
     const { generateLocalResponse } = await import('./localAIService');
     const onProgress = vi.fn();
+    const onToken = vi.fn();
 
     const answer = await generateLocalResponse({
       model: 'UT Flash',
       messages: [{ role: 'user', content: 'Earlier question' }],
       prompt: 'Current question',
       onProgress,
+      onToken,
     });
 
     expect(answer).toBe('A local answer.');
+    expect(onToken).toHaveBeenLastCalledWith('A local answer.');
     expect(createEngine).toHaveBeenCalledWith(
+      expect.any(Object),
       'Qwen3-0.6B-q4f16_1-MLC',
       expect.objectContaining({ initProgressCallback: expect.any(Function) }),
     );
@@ -44,6 +52,7 @@ describe('localAIService', () => {
         messages: expect.arrayContaining([
           { role: 'user', content: 'Current question' },
         ]),
+        stream: true,
       }),
     );
   });

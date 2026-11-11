@@ -4,6 +4,10 @@ Unbeltedtech is a private, browser-based AI workspace for ideation, engineering,
 analysis, and exploration. It runs language models directly on the user's device
 with WebGPU, so it does not require an account or API key.
 
+The lightweight model starts preloading shortly after launch, inference runs in a
+Web Worker to keep the interface responsive, and responses stream into the chat as
+they are generated.
+
 ## Local AI models
 
 - **UT Pro** uses Llama 3.2 3B for higher-quality responses. Its first download is

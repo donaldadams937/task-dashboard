@@ -23,7 +23,11 @@ import {
   CpuChipIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { generateLocalResponse, isWebGPUSupported } from './services/localAIService';
+import {
+  generateLocalResponse,
+  isWebGPUSupported,
+  prepareLocalModel,
+} from './services/localAIService';
 
 const promptCards = [
   {
@@ -79,7 +83,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
-  const [model, setModel] = useState('UT Pro');
+  const [model, setModel] = useState('UT Flash');
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState('idle');
@@ -95,6 +99,34 @@ function App() {
   };
 
   useEffect(resizeTextarea, [prompt]);
+
+  useEffect(() => {
+    if (!isWebGPUSupported()) return undefined;
+    let active = true;
+
+    const preloadTimer = setTimeout(() => {
+      setModelStatus('loading');
+      prepareLocalModel({
+        model,
+        onProgress: ({ progress, text }) => {
+          if (!active) return;
+          setLoadProgress(progress);
+          setLoadMessage(text);
+        },
+      })
+        .then(() => {
+          if (active) setModelStatus('ready');
+        })
+        .catch(() => {
+          if (active) setModelStatus('error');
+        });
+    }, 500);
+
+    return () => {
+      active = false;
+      clearTimeout(preloadTimer);
+    };
+  }, [model]);
 
   const startNewChat = () => {
     setMessages([]);
@@ -125,13 +157,26 @@ function App() {
           setLoadProgress(progress);
           setLoadMessage(text);
         },
+        onToken: (partialResponse) => {
+          setIsThinking(false);
+          setMessages([
+            ...conversation,
+            { role: 'user', content: value },
+            { role: 'assistant', content: partialResponse, streaming: true },
+          ]);
+        },
       });
-      setMessages((current) => [...current, { role: 'assistant', content: response }]);
+      setMessages([
+        ...conversation,
+        { role: 'user', content: value },
+        { role: 'assistant', content: response },
+      ]);
       setModelStatus('ready');
     } catch (error) {
       setModelStatus('error');
-      setMessages((current) => [
-        ...current,
+      setMessages([
+        ...conversation,
+        { role: 'user', content: value },
         {
           role: 'assistant',
           content: error instanceof Error ? error.message : 'The AI request failed. Please try again.',
@@ -259,7 +304,7 @@ function App() {
             </button>
             {modelOpen && (
               <div className="model-menu">
-                {['UT Pro', 'UT Flash'].map((option) => (
+                {['UT Flash', 'UT Pro'].map((option) => (
                   <button
                     key={option}
                     onClick={() => {
@@ -272,7 +317,7 @@ function App() {
                   >
                     <span>
                       <strong>{option}</strong>
-                      <small>{option === 'UT Pro' ? 'Deep synthesis core' : 'Rapid response core'}</small>
+                      <small>{option === 'UT Pro' ? 'Higher quality / larger download' : 'Fast local responses'}</small>
                     </span>
                     {model === option && <CheckIcon />}
                   </button>
@@ -338,7 +383,7 @@ function App() {
               {messages.map((message, index) => (
                 <article
                   key={`${message.role}-${index}`}
-                  className={`message message--${message.role}${message.error ? ' message--error' : ''}`}
+                  className={`message message--${message.role}${message.error ? ' message--error' : ''}${message.streaming ? ' message--streaming' : ''}`}
                 >
                   <div className="message-avatar">
                     {message.role === 'assistant' ? <BrandMark compact /> : 'DA'}
@@ -346,7 +391,7 @@ function App() {
                   <div className="message-content">
                     <strong>{message.role === 'assistant' ? 'Unbeltedtech' : 'You'}</strong>
                     <p>{message.content}</p>
-                    {message.role === 'assistant' && (
+                    {message.role === 'assistant' && !message.streaming && (
                       <div className="message-actions">
                         <button aria-label="Copy response" onClick={() => copyMessage(message.content, index)}>
                           {copiedIndex === index ? <CheckIcon /> : <ClipboardDocumentIcon />}

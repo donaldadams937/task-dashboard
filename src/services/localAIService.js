@@ -10,6 +10,7 @@ and never invent facts. Keep responses concise unless the user asks for depth.`;
 let engine;
 let engineModel;
 let enginePromise;
+let engineWorker;
 
 export function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -23,9 +24,14 @@ async function getEngine(model, onProgress) {
   if (!enginePromise || engineModel !== modelId) {
     engineModel = modelId;
     enginePromise = import('@mlc-ai/web-llm')
-      .then(async ({ CreateMLCEngine }) => {
+      .then(async ({ CreateWebWorkerMLCEngine }) => {
         if (engine?.unload) await engine.unload();
-        engine = await CreateMLCEngine(modelId, {
+        engineWorker?.terminate();
+        engineWorker = new Worker(
+          new URL('../workers/localAI.worker.js', import.meta.url),
+          { type: 'module' },
+        );
+        engine = await CreateWebWorkerMLCEngine(engineWorker, modelId, {
           initProgressCallback: (report) => {
             onProgress?.({
               progress: Math.max(0, Math.min(1, report.progress ?? 0)),
@@ -45,15 +51,24 @@ async function getEngine(model, onProgress) {
   return enginePromise;
 }
 
-export async function generateLocalResponse({ model, messages, prompt, onProgress }) {
+export async function prepareLocalModel({ model, onProgress }) {
   if (!isWebGPUSupported()) {
     throw new Error(
       'Local AI requires WebGPU. Open Unbeltedtech in a recent version of Chrome or Edge on a compatible device.',
     );
   }
 
-  const localEngine = await getEngine(model, onProgress);
-  const response = await localEngine.chat.completions.create({
+  return getEngine(model, onProgress);
+}
+
+function visibleResponse(text) {
+  if (/^\s*<think>/i.test(text) && !/<\/think>/i.test(text)) return '';
+  return text.replace(/^\s*<think>[\s\S]*?<\/think>\s*/i, '').trimStart();
+}
+
+export async function generateLocalResponse({ model, messages, prompt, onProgress, onToken }) {
+  const localEngine = await prepareLocalModel({ model, onProgress });
+  const chunks = await localEngine.chat.completions.create({
     messages: [
       { role: 'system', content: systemPrompt },
       ...messages.slice(-10).map((message) => ({
@@ -64,12 +79,20 @@ export async function generateLocalResponse({ model, messages, prompt, onProgres
     ],
     max_tokens: 1024,
     temperature: 0.6,
+    stream: true,
   });
 
-  const text = response.choices?.[0]?.message?.content?.trim();
+  let text = '';
+  for await (const chunk of chunks) {
+    text += chunk.choices?.[0]?.delta?.content ?? '';
+    const visible = visibleResponse(text);
+    if (visible) onToken?.(visible);
+  }
+
+  text = visibleResponse(text).trim();
   if (!text) {
     throw new Error('The local model returned an empty answer. Please try rephrasing the question.');
   }
 
-  return text.replace(/^<think>[\s\S]*?<\/think>\s*/i, '').trim();
+  return text;
 }

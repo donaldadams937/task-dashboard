@@ -623,6 +623,22 @@ a:focus-visible {
   color: #ff9a92;
 }
 
+.message--streaming .message-content p::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  background: #d6ff3f;
+  box-shadow: 0 0 8px rgba(214,255,63,.45);
+  animation: stream-cursor .8s steps(2, jump-none) infinite;
+}
+
+@keyframes stream-cursor {
+  50% { opacity: 0; }
+}
+
 .message-actions { display: flex; gap: 3px; margin-top: 11px; }
 
 .message-actions button {
