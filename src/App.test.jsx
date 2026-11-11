@@ -1,0 +1,44 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
+import App from './App';
+
+describe('Unbeltedtech', () => {
+  it('renders the AI welcome experience', () => {
+    render(<App />);
+
+    expect(screen.getByLabelText('Unbeltedtech home')).toBeInTheDocument();
+    expect(screen.getByText(/Build beyond/i)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /Message Unbeltedtech/i })).toBeInTheDocument();
+  });
+
+  it('fills the composer from a suggestion', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /Concept Forge/i }));
+
+    expect(screen.getByRole('textbox')).toHaveValue(
+      'Generate five unconventional product concepts for the future of remote collaboration.',
+    );
+  });
+
+  it('sends a prompt and displays an AI response', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    const composer = screen.getByRole('textbox');
+    fireEvent.change(composer, { target: { value: 'Help me analyze a product trend' } });
+    fireEvent.submit(composer.closest('form'));
+
+    expect(screen.getByText('Help me analyze a product trend')).toBeInTheDocument();
+    expect(screen.getByLabelText('Unbeltedtech is thinking')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(screen.getByText(/Start with a clear question/i)).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+});
