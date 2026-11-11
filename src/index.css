@@ -1001,6 +1001,36 @@ a:focus-visible {
   margin-top: 0;
 }
 
+.profile-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #686d77;
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.profile-editor {
+  width: 100%;
+  min-height: 92px;
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  resize: vertical;
+  border: 1px solid #30333c;
+  border-radius: 2px;
+  outline: 0;
+  color: #dfe1e6;
+  background: #0a0c11;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.profile-editor:focus {
+  border-color: #687344;
+  box-shadow: 0 0 0 2px rgba(214,255,63,.06);
+}
+
 @media (max-width: 1050px) {
   .suggestion-grid { grid-template-columns: repeat(2, 1fr); }
   .suggestion-card { min-height: 170px; }

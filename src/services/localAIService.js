@@ -1,3 +1,5 @@
+import { getDonaldAdamsContext, shouldLoadIdentityContext } from './knowledgeService';
+
 const modelIds = {
   'UT Pro': 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
   'UT Flash': 'Qwen3-0.6B-q4f16_1-MLC',
@@ -66,11 +68,27 @@ function visibleResponse(text) {
   return text.replace(/^\s*<think>[\s\S]*?<\/think>\s*/i, '').trimStart();
 }
 
-export async function generateLocalResponse({ model, messages, prompt, onProgress, onToken }) {
-  const localEngine = await prepareLocalModel({ model, onProgress });
+export async function generateLocalResponse({
+  model,
+  messages,
+  prompt,
+  onProgress,
+  onToken,
+  userProfile,
+}) {
+  const [localEngine, publicContext] = await Promise.all([
+    prepareLocalModel({ model, onProgress }),
+    shouldLoadIdentityContext(prompt) ? getDonaldAdamsContext() : Promise.resolve(''),
+  ]);
+  const identityContext = [
+    'The current user is Donald Adams, confirmed owner of the GitHub account donaldadams937.',
+    userProfile && `Private user-provided profile:\n${userProfile}`,
+    publicContext,
+    publicContext && 'Distinguish the current user from unrelated public people with the same name.',
+  ].filter(Boolean).join('\n\n');
   const chunks = await localEngine.chat.completions.create({
     messages: [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: `${systemPrompt}\n\n${identityContext}` },
       ...messages.slice(-10).map((message) => ({
         role: message.role,
         content: message.content,

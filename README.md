@@ -18,6 +18,10 @@ they are generated.
 Model files are cached by the browser after the first download. Prompts and model
 inference stay on the user's device.
 
+Identity questions can be grounded with the confirmed public GitHub profile for
+`donaldadams937` and relevant Wikipedia summaries. Users can add private profile
+details in Settings; those details remain in browser storage.
+
 ## Browser requirements
 
 Local inference requires WebGPU. Use a recent version of Chrome or Edge on a

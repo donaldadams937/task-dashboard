@@ -10,8 +10,13 @@ vi.mock('./services/localAIService', () => ({
   prepareLocalModel: vi.fn(() => new Promise(() => {})),
 }));
 
+vi.mock('./services/knowledgeService', () => ({
+  preloadPublicIdentity: vi.fn(),
+}));
+
 describe('Unbeltedtech', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -55,6 +60,7 @@ describe('Unbeltedtech', () => {
         prompt: 'Help me analyze a product trend',
         onProgress: expect.any(Function),
         onToken: expect.any(Function),
+        userProfile: '',
       }),
     );
   });

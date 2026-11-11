@@ -28,6 +28,9 @@ import {
   isWebGPUSupported,
   prepareLocalModel,
 } from './services/localAIService';
+import { preloadPublicIdentity } from './services/knowledgeService';
+
+const PROFILE_STORAGE = 'unbeltedtech.userProfile';
 
 const promptCards = [
   {
@@ -89,6 +92,8 @@ function App() {
   const [modelStatus, setModelStatus] = useState('idle');
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadMessage, setLoadMessage] = useState('');
+  const [userProfile, setUserProfile] = useState(() => localStorage.getItem(PROFILE_STORAGE) ?? '');
+  const [profileDraft, setProfileDraft] = useState('');
   const textareaRef = useRef(null);
 
   const resizeTextarea = () => {
@@ -99,6 +104,10 @@ function App() {
   };
 
   useEffect(resizeTextarea, [prompt]);
+
+  useEffect(() => {
+    preloadPublicIdentity();
+  }, []);
 
   useEffect(() => {
     if (!isWebGPUSupported()) return undefined;
@@ -165,6 +174,7 @@ function App() {
             { role: 'assistant', content: partialResponse, streaming: true },
           ]);
         },
+        userProfile,
       });
       setMessages([
         ...conversation,
@@ -207,8 +217,20 @@ function App() {
   };
 
   const openSettings = () => {
+    setProfileDraft(userProfile);
     setSettingsOpen(true);
     setSidebarOpen(false);
+  };
+
+  const saveProfile = () => {
+    const nextProfile = profileDraft.trim();
+    if (nextProfile) {
+      localStorage.setItem(PROFILE_STORAGE, nextProfile);
+    } else {
+      localStorage.removeItem(PROFILE_STORAGE);
+    }
+    setUserProfile(nextProfile);
+    setSettingsOpen(false);
   };
 
   return (
@@ -476,7 +498,7 @@ function App() {
             className="settings-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="gemini-settings-title"
+            aria-labelledby="local-settings-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="settings-modal-header">
@@ -486,7 +508,7 @@ function App() {
               </button>
             </div>
             <p className="eyebrow"><span /> ON-DEVICE INTELLIGENCE</p>
-            <h2 id="gemini-settings-title">Local AI core</h2>
+            <h2 id="local-settings-title">Local AI core</h2>
             <p>
               Unbeltedtech runs privately on your device with WebGPU. No account, API key, or
               remote inference service is required.
@@ -507,9 +529,16 @@ function App() {
                 <strong>QWEN3 0.6B / ~500 MB</strong>
               </div>
             </div>
-            <button className="save-key-button local-close-button" onClick={() => setSettingsOpen(false)}>
-              Continue
-            </button>
+            <label className="profile-label" htmlFor="personal-profile">Private personal profile</label>
+            <textarea
+              id="personal-profile"
+              className="profile-editor"
+              value={profileDraft}
+              onChange={(event) => setProfileDraft(event.target.value)}
+              placeholder="Add your role, business, interests, and goals so Unbeltedtech can personalize answers."
+              rows="4"
+            />
+            <button className="save-key-button local-close-button" onClick={saveProfile}>Save and continue</button>
             <small>Model files are downloaded once and cached by your browser for future sessions.</small>
           </section>
         </div>
